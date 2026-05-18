@@ -1,0 +1,51 @@
+{
+  "info": {
+    "name": "Serverless Order Pipeline",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://<api-id>.execute-api.us-east-1.amazonaws.com/dev",
+      "description": "Replace with the api_base_url output from terraform apply"
+    }
+  ],
+  "item": [
+    {
+      "name": "Place Order — valid",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/orders",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customer_email\": \"test@example.com\",\n  \"item_id\": \"ITEM-001\",\n  \"quantity\": 2,\n  \"shipping_address\": {\n    \"line1\": \"123 Main St\",\n    \"city\": \"Austin\",\n    \"state\": \"TX\",\n    \"zip\": \"78701\",\n    \"country\": \"US\"\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "Place Order — missing field (expect 400)",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/orders",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customer_email\": \"test@example.com\",\n  \"quantity\": 2\n}"
+        }
+      }
+    },
+    {
+      "name": "Place Order — invalid quantity (expect 400)",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/orders",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customer_email\": \"test@example.com\",\n  \"item_id\": \"ITEM-001\",\n  \"quantity\": 0,\n  \"shipping_address\": {\n    \"line1\": \"123 Main St\",\n    \"city\": \"Austin\",\n    \"state\": \"TX\",\n    \"zip\": \"78701\",\n    \"country\": \"US\"\n  }\n}"
+        }
+      }
+    }
+  ]
+}

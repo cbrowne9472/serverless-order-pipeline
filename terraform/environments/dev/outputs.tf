@@ -18,7 +18,7 @@ output "order_intake_function_name" {
   value       = module.order_intake.function_name
 }
 
-output "order_intake_invoke_arn" {
-  description = "Order intake Lambda invoke ARN — needed for API Gateway wiring on Day 5"
-  value       = module.order_intake.invoke_arn
+output "api_base_url" {
+  description = "API base URL — POST to {api_base_url}/orders to place an order"
+  value       = module.api_gateway.base_url
 }

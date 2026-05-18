@@ -96,13 +96,68 @@ serverless-order-pipeline/
 
 ## Deploying
 
+### First time only — bootstrap the Terraform backend
+
 ```bash
-# Deploy dev environment
+cd terraform/bootstrap
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars — set a globally unique S3 bucket name
+terraform init
+terraform apply
+```
+
+This creates the S3 bucket and DynamoDB lock table that store Terraform state. Run once per AWS account.
+
+### Deploy dev environment
+
+```bash
 cd terraform/environments/dev
 terraform init
 terraform apply
+```
 
-# Tear down
+The `api_base_url` output gives you the live endpoint.
+
+### Place a test order
+
+```bash
+curl -X POST <api_base_url>/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_email": "you@example.com",
+    "item_id": "ITEM-001",
+    "quantity": 1,
+    "shipping_address": {
+      "line1": "123 Main St",
+      "city": "Austin",
+      "state": "TX",
+      "zip": "78701",
+      "country": "US"
+    }
+  }'
+```
+
+A Postman collection is also available at `tests/postman/order-pipeline.postman_collection.json`.
+
+### Run unit tests
+
+```bash
+pip install boto3 pytest
+pytest tests/unit/ -v
+```
+
+### Run integration tests (requires live AWS environment)
+
+```bash
+export API_BASE_URL=$(cd terraform/environments/dev && terraform output -raw api_base_url)
+export ORDERS_TABLE=$(cd terraform/environments/dev && terraform output -raw orders_table_name)
+pytest tests/integration/ -v
+```
+
+### Tear down
+
+```bash
+cd terraform/environments/dev
 terraform destroy
 ```
 

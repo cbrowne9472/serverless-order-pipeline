@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 from unittest.mock import MagicMock, patch
@@ -6,7 +7,15 @@ import pytest
 
 os.environ["ORDERS_TABLE"] = "test-orders-table"
 
-from services.order_intake import handler  # noqa: E402
+import sys
+
+_spec = importlib.util.spec_from_file_location(
+    "order_intake_handler",
+    os.path.join(os.path.dirname(__file__), "../../services/order-intake/handler.py"),
+)
+handler = importlib.util.module_from_spec(_spec)
+sys.modules["order_intake_handler"] = handler
+_spec.loader.exec_module(handler)
 
 
 VALID_BODY = {
@@ -29,7 +38,7 @@ def _event(body):
 
 # --- happy path ---
 
-@patch("services.order_intake.handler.dynamodb")
+@patch("order_intake_handler.dynamodb")
 def test_valid_order_returns_201(mock_dynamo):
     mock_table = MagicMock()
     mock_dynamo.Table.return_value = mock_table
@@ -43,7 +52,7 @@ def test_valid_order_returns_201(mock_dynamo):
     mock_table.put_item.assert_called_once()
 
 
-@patch("services.order_intake.handler.dynamodb")
+@patch("order_intake_handler.dynamodb")
 def test_saved_order_contains_all_fields(mock_dynamo):
     mock_table = MagicMock()
     mock_dynamo.Table.return_value = mock_table
@@ -94,7 +103,7 @@ def test_missing_address_field_returns_400():
 
 # --- infrastructure errors ---
 
-@patch("services.order_intake.handler.dynamodb")
+@patch("order_intake_handler.dynamodb")
 def test_dynamodb_failure_returns_500(mock_dynamo):
     from botocore.exceptions import ClientError
 

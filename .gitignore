@@ -10,6 +10,7 @@ terraform/environments/**/.terraform/
 __pycache__/
 *.py[cod]
 .venv/
+.pytest_cache/
 *.egg-info/
 dist/
 .pytest_cache/
