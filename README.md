@@ -8,46 +8,8 @@ Customer places an order → the system validates it, checks inventory, processe
 
 ## Architecture
 
-```
-Customer
-    │
-    ▼
-API Gateway
-    │  POST /orders
-    ▼
-Lambda: Order Intake
-    │  • validates request shape
-    │  • saves order to DynamoDB (status: PENDING)
-    │  • returns order_id immediately (<100ms)
-    ▼
-DynamoDB (orders table)
-    │
-    │  DynamoDB Stream fires on INSERT
-    ▼
-EventBridge (orchestrator)
-    │
-    ├──────────────────┬──────────────────┐
-    ▼                  ▼                  ▼
-Lambda             Lambda             Lambda
-(Validate)        (Inventory)        (Payment)
-    │                  │                  │
-    │  OrderValidated  │  InventoryReserved│  PaymentConfirmed
-    │─────────────────►│─────────────────►│────────────────►
-    │                  │                  │
-    ▼                  ▼                  ▼
- SQS DLQ           SQS DLQ          Stripe API (test)
-(on failure)      (on failure)
-                                          │
-                                          ▼
-                                   SNS Topic (fan-out)
-                                     ├──────────────┐
-                                     ▼              ▼
-                              Lambda (Email)  Lambda (Warehouse)
-                                     │
-                                     ▼
-                                    SES
-                             (confirmation email)
-```
+<img width="1181" height="807" alt="image" src="https://github.com/user-attachments/assets/e1f24cd2-537e-4d22-b1f3-02f6da7edb91" />
+
 
 ## Tech Stack
 
@@ -152,9 +114,7 @@ One command to build everything. One command to tear it down.
 - **CloudWatch Dashboard** — orders/min, failure rate per stage, DLQ depth
 - **Alarms** — fires if payment failure rate exceeds 5% or any DLQ depth > 0
 
-## Status
 
-Built in 4 weeks as a portfolio project to demonstrate production-grade serverless architecture patterns.
 
 | Week | Focus |
 |------|-------|
