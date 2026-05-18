@@ -20,3 +20,26 @@ provider "aws" {
     }
   }
 }
+
+module "database" {
+  source      = "../../modules/database"
+  project     = "serverless-order-pipeline"
+  environment = var.environment
+}
+
+module "order_intake_role" {
+  source        = "../../modules/lambda"
+  project       = "serverless-order-pipeline"
+  environment   = var.environment
+  function_name = "order-intake"
+  policy_json   = data.aws_iam_policy_document.order_intake.json
+}
+
+# Order intake needs to write new orders and nothing else
+data "aws_iam_policy_document" "order_intake" {
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:PutItem"]
+    resources = [module.database.table_arn]
+  }
+}
