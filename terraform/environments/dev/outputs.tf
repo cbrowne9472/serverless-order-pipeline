@@ -13,7 +13,12 @@ output "orders_table_stream_arn" {
   value       = module.database.stream_arn
 }
 
-output "order_intake_role_arn" {
-  description = "IAM role ARN for the order intake Lambda"
-  value       = module.order_intake_role.role_arn
+output "order_intake_function_name" {
+  description = "Order intake Lambda function name"
+  value       = module.order_intake.function_name
+}
+
+output "order_intake_invoke_arn" {
+  description = "Order intake Lambda invoke ARN — needed for API Gateway wiring on Day 5"
+  value       = module.order_intake.invoke_arn
 }

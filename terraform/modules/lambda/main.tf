@@ -39,3 +39,28 @@ resource "aws_iam_role_policy" "custom" {
   role   = aws_iam_role.this.id
   policy = var.policy_json
 }
+
+data "archive_file" "source" {
+  type        = "zip"
+  source_dir  = var.source_dir
+  output_path = "${path.module}/builds/${var.function_name}.zip"
+}
+
+resource "aws_lambda_function" "this" {
+  function_name    = local.function_name
+  role             = aws_iam_role.this.arn
+  runtime          = "python3.11"
+  handler          = var.handler
+  filename         = data.archive_file.source.output_path
+  source_code_hash = data.archive_file.source.output_base64sha256
+  timeout          = var.timeout
+  memory_size      = var.memory_size
+
+  environment {
+    variables = var.environment_variables
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+}

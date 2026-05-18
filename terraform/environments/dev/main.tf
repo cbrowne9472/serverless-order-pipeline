@@ -27,12 +27,17 @@ module "database" {
   environment = var.environment
 }
 
-module "order_intake_role" {
+module "order_intake" {
   source        = "../../modules/lambda"
   project       = "serverless-order-pipeline"
   environment   = var.environment
   function_name = "order-intake"
+  source_dir    = "${path.root}/../../../services/order-intake"
   policy_json   = data.aws_iam_policy_document.order_intake.json
+
+  environment_variables = {
+    ORDERS_TABLE = module.database.table_name
+  }
 }
 
 # Order intake needs to write new orders and nothing else
