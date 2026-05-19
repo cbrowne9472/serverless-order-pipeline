@@ -22,3 +22,13 @@ output "api_base_url" {
   description = "API base URL — POST to {api_base_url}/orders to place an order"
   value       = module.api_gateway.base_url
 }
+
+output "inventory_table_name" {
+  description = "Inventory table name — pass to seed_inventory.py"
+  value       = module.database.inventory_table_name
+}
+
+output "stripe_secret_arn" {
+  description = "Secrets Manager ARN for the Stripe key — run: aws secretsmanager put-secret-value --secret-id <arn> --secret-string sk_test_..."
+  value       = aws_secretsmanager_secret.stripe_key.arn
+}

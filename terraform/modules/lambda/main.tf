@@ -40,6 +40,37 @@ resource "aws_iam_role_policy" "custom" {
   policy = var.policy_json
 }
 
+# When a DLQ ARN is provided, failed async invocations route there after retries
+resource "aws_lambda_function_event_invoke_config" "this" {
+  count         = var.dlq_arn != "" ? 1 : 0
+  function_name = aws_lambda_function.this.function_name
+
+  maximum_retry_attempts = 2
+
+  destination_config {
+    on_failure {
+      destination = var.dlq_arn
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "dlq" {
+  count  = var.dlq_arn != "" ? 1 : 0
+  name   = "${local.function_name}-dlq-policy"
+  role   = aws_iam_role.this.id
+  policy = data.aws_iam_policy_document.dlq[0].json
+}
+
+data "aws_iam_policy_document" "dlq" {
+  count = var.dlq_arn != "" ? 1 : 0
+
+  statement {
+    effect    = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [var.dlq_arn]
+  }
+}
+
 data "archive_file" "source" {
   type        = "zip"
   source_dir  = var.source_dir

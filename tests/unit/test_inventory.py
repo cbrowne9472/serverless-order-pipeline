@@ -122,6 +122,44 @@ def test_insufficient_stock_sets_inventory_insufficient_status(mock_dynamo, mock
     assert orders_update["ExpressionAttributeValues"][":status"] == "INVENTORY_INSUFFICIENT"
 
 
+# --- payment failed → release inventory ---
+
+@patch("inventory_handler.events_client")
+@patch("inventory_handler.dynamodb")
+def test_payment_failed_releases_inventory(mock_dynamo, mock_events):
+    mock_dynamo.Table.return_value = MagicMock()
+
+    event = {"detail-type": "PaymentFailed", "detail": BASE_ORDER}
+    handler.lambda_handler(event, {})
+
+    release_call = mock_dynamo.Table.return_value.update_item.call_args_list[0][1]
+    assert "quantity + :qty" in release_call["UpdateExpression"]
+    assert release_call["ExpressionAttributeValues"][":qty"] == BASE_ORDER["quantity"]
+
+
+@patch("inventory_handler.events_client")
+@patch("inventory_handler.dynamodb")
+def test_payment_failed_sets_inventory_released_status(mock_dynamo, mock_events):
+    mock_dynamo.Table.return_value = MagicMock()
+
+    event = {"detail-type": "PaymentFailed", "detail": BASE_ORDER}
+    handler.lambda_handler(event, {})
+
+    orders_update = mock_dynamo.Table.return_value.update_item.call_args_list[1][1]
+    assert orders_update["ExpressionAttributeValues"][":status"] == "INVENTORY_RELEASED"
+
+
+@patch("inventory_handler.events_client")
+@patch("inventory_handler.dynamodb")
+def test_payment_failed_does_not_publish_event(mock_dynamo, mock_events):
+    mock_dynamo.Table.return_value = MagicMock()
+
+    event = {"detail-type": "PaymentFailed", "detail": BASE_ORDER}
+    handler.lambda_handler(event, {})
+
+    mock_events.put_events.assert_not_called()
+
+
 # --- unhandled DynamoDB errors should propagate so Lambda retries ---
 
 @patch("inventory_handler.events_client")

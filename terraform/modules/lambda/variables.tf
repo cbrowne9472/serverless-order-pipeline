@@ -47,3 +47,9 @@ variable "environment_variables" {
   type        = map(string)
   default     = {}
 }
+
+variable "dlq_arn" {
+  description = "SQS DLQ ARN. When set, failed async invocations route here after 2 retries."
+  type        = string
+  default     = ""
+}

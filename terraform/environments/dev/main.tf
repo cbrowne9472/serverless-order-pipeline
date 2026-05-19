@@ -124,6 +124,7 @@ module "validation" {
   function_name = "validation"
   source_dir    = "${path.root}/../../../services/validation"
   policy_json   = data.aws_iam_policy_document.validation.json
+  dlq_arn       = module.queues.validation_dlq_arn
 
   environment_variables = {
     ORDERS_TABLE   = module.database.table_name
@@ -156,6 +157,7 @@ module "inventory" {
   function_name = "inventory"
   source_dir    = "${path.root}/../../../services/inventory"
   policy_json   = data.aws_iam_policy_document.inventory.json
+  dlq_arn       = module.queues.inventory_dlq_arn
 
   environment_variables = {
     ORDERS_TABLE    = module.database.table_name
@@ -239,6 +241,103 @@ resource "aws_lambda_permission" "eventbridge_invoke_inventory" {
   function_name = module.inventory.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.order_validated.arn
+}
+
+# ---------------------------------------------------------------------------
+# Payment Lambda
+# ---------------------------------------------------------------------------
+
+resource "aws_secretsmanager_secret" "stripe_key" {
+  name                    = "${local.project}/${var.environment}/stripe-secret-key"
+  recovery_window_in_days = 0 # Allow immediate deletion in dev
+}
+
+module "payment" {
+  source        = "../../modules/lambda"
+  project       = local.project
+  environment   = var.environment
+  function_name = "payment"
+  source_dir    = "${path.root}/../../../services/payment"
+  policy_json   = data.aws_iam_policy_document.payment.json
+  dlq_arn       = module.queues.payment_dlq_arn
+
+  environment_variables = {
+    ORDERS_TABLE      = module.database.table_name
+    EVENT_BUS_NAME    = module.eventbridge.event_bus_name
+    STRIPE_SECRET_ARN = aws_secretsmanager_secret.stripe_key.arn
+  }
+}
+
+data "aws_iam_policy_document" "payment" {
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [module.database.table_arn]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["events:PutEvents"]
+    resources = [module.eventbridge.event_bus_arn]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.stripe_key.arn]
+  }
+}
+
+# InventoryReserved → Payment Lambda
+resource "aws_cloudwatch_event_rule" "inventory_reserved" {
+  name           = "${local.project}-${var.environment}-inventory-reserved"
+  event_bus_name = module.eventbridge.event_bus_name
+
+  event_pattern = jsonencode({
+    source      = ["order-pipeline"]
+    detail-type = ["InventoryReserved"]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "payment" {
+  rule           = aws_cloudwatch_event_rule.inventory_reserved.name
+  event_bus_name = module.eventbridge.event_bus_name
+  target_id      = "PaymentLambda"
+  arn            = module.payment.function_arn
+}
+
+resource "aws_lambda_permission" "eventbridge_invoke_payment" {
+  statement_id  = "AllowEventBridgeInvokePayment"
+  action        = "lambda:InvokeFunction"
+  function_name = module.payment.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.inventory_reserved.arn
+}
+
+# PaymentFailed → Inventory Lambda (release stock)
+resource "aws_cloudwatch_event_rule" "payment_failed" {
+  name           = "${local.project}-${var.environment}-payment-failed"
+  event_bus_name = module.eventbridge.event_bus_name
+
+  event_pattern = jsonencode({
+    source      = ["order-pipeline"]
+    detail-type = ["PaymentFailed"]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "inventory_release" {
+  rule           = aws_cloudwatch_event_rule.payment_failed.name
+  event_bus_name = module.eventbridge.event_bus_name
+  target_id      = "InventoryReleaseLambda"
+  arn            = module.inventory.function_arn
+}
+
+resource "aws_lambda_permission" "eventbridge_invoke_inventory_release" {
+  statement_id  = "AllowEventBridgeInvokeInventoryRelease"
+  action        = "lambda:InvokeFunction"
+  function_name = module.inventory.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.payment_failed.arn
 }
 
 # ---------------------------------------------------------------------------
