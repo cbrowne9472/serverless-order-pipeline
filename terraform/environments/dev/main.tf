@@ -109,7 +109,142 @@ data "aws_iam_policy_document" "stream_processor" {
   }
 }
 
+locals {
+  project = "serverless-order-pipeline"
+}
+
+# ---------------------------------------------------------------------------
+# Validation Lambda
+# ---------------------------------------------------------------------------
+
+module "validation" {
+  source        = "../../modules/lambda"
+  project       = local.project
+  environment   = var.environment
+  function_name = "validation"
+  source_dir    = "${path.root}/../../../services/validation"
+  policy_json   = data.aws_iam_policy_document.validation.json
+
+  environment_variables = {
+    ORDERS_TABLE   = module.database.table_name
+    EVENT_BUS_NAME = module.eventbridge.event_bus_name
+  }
+}
+
+data "aws_iam_policy_document" "validation" {
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [module.database.table_arn]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["events:PutEvents"]
+    resources = [module.eventbridge.event_bus_arn]
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Inventory Lambda
+# ---------------------------------------------------------------------------
+
+module "inventory" {
+  source        = "../../modules/lambda"
+  project       = local.project
+  environment   = var.environment
+  function_name = "inventory"
+  source_dir    = "${path.root}/../../../services/inventory"
+  policy_json   = data.aws_iam_policy_document.inventory.json
+
+  environment_variables = {
+    ORDERS_TABLE    = module.database.table_name
+    INVENTORY_TABLE = module.database.inventory_table_name
+    EVENT_BUS_NAME  = module.eventbridge.event_bus_name
+  }
+}
+
+data "aws_iam_policy_document" "inventory" {
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [module.database.table_arn]
+  }
+
+  # Conditional write on the inventory table — UpdateItem with ConditionExpression
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [module.database.inventory_table_arn]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["events:PutEvents"]
+    resources = [module.eventbridge.event_bus_arn]
+  }
+}
+
+# ---------------------------------------------------------------------------
+# EventBridge routing rules (Day 1)
+# ---------------------------------------------------------------------------
+
+# OrderCreated → Validation Lambda
+resource "aws_cloudwatch_event_rule" "order_created" {
+  name           = "${local.project}-${var.environment}-order-created"
+  event_bus_name = module.eventbridge.event_bus_name
+
+  event_pattern = jsonencode({
+    source      = ["order-pipeline"]
+    detail-type = ["OrderCreated"]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "validation" {
+  rule           = aws_cloudwatch_event_rule.order_created.name
+  event_bus_name = module.eventbridge.event_bus_name
+  target_id      = "ValidationLambda"
+  arn            = module.validation.function_arn
+}
+
+resource "aws_lambda_permission" "eventbridge_invoke_validation" {
+  statement_id  = "AllowEventBridgeInvokeValidation"
+  action        = "lambda:InvokeFunction"
+  function_name = module.validation.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.order_created.arn
+}
+
+# OrderValidated → Inventory Lambda
+resource "aws_cloudwatch_event_rule" "order_validated" {
+  name           = "${local.project}-${var.environment}-order-validated"
+  event_bus_name = module.eventbridge.event_bus_name
+
+  event_pattern = jsonencode({
+    source      = ["order-pipeline"]
+    detail-type = ["OrderValidated"]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "inventory" {
+  rule           = aws_cloudwatch_event_rule.order_validated.name
+  event_bus_name = module.eventbridge.event_bus_name
+  target_id      = "InventoryLambda"
+  arn            = module.inventory.function_arn
+}
+
+resource "aws_lambda_permission" "eventbridge_invoke_inventory" {
+  statement_id  = "AllowEventBridgeInvokeInventory"
+  action        = "lambda:InvokeFunction"
+  function_name = module.inventory.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.order_validated.arn
+}
+
+# ---------------------------------------------------------------------------
 # Wire the DynamoDB stream to the stream processor Lambda
+# ---------------------------------------------------------------------------
+
 resource "aws_lambda_event_source_mapping" "dynamodb_stream" {
   event_source_arn              = module.database.stream_arn
   function_name                 = module.stream_processor.function_arn
