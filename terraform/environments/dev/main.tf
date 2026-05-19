@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -28,12 +32,13 @@ module "database" {
 }
 
 module "order_intake" {
-  source        = "../../modules/lambda"
-  project       = "serverless-order-pipeline"
-  environment   = var.environment
-  function_name = "order-intake"
-  source_dir    = "${path.root}/../../../services/order-intake"
-  policy_json   = data.aws_iam_policy_document.order_intake.json
+  source            = "../../modules/lambda"
+  project           = "serverless-order-pipeline"
+  environment       = var.environment
+  function_name     = "order-intake"
+  source_dir        = "${path.root}/../../../services/order-intake"
+  policy_json       = data.aws_iam_policy_document.order_intake.json
+  has_custom_policy = true
 
   environment_variables = {
     ORDERS_TABLE = module.database.table_name
@@ -70,12 +75,13 @@ module "eventbridge" {
 }
 
 module "stream_processor" {
-  source        = "../../modules/lambda"
-  project       = "serverless-order-pipeline"
-  environment   = var.environment
-  function_name = "stream-processor"
-  source_dir    = "${path.root}/../../../services/stream-processor"
-  policy_json   = data.aws_iam_policy_document.stream_processor.json
+  source            = "../../modules/lambda"
+  project           = "serverless-order-pipeline"
+  environment       = var.environment
+  function_name     = "stream-processor"
+  source_dir        = "${path.root}/../../../services/stream-processor"
+  policy_json       = data.aws_iam_policy_document.stream_processor.json
+  has_custom_policy = true
 
   environment_variables = {
     EVENT_BUS_NAME = module.eventbridge.event_bus_name
@@ -118,13 +124,15 @@ locals {
 # ---------------------------------------------------------------------------
 
 module "validation" {
-  source        = "../../modules/lambda"
-  project       = local.project
-  environment   = var.environment
-  function_name = "validation"
-  source_dir    = "${path.root}/../../../services/validation"
-  policy_json   = data.aws_iam_policy_document.validation.json
-  dlq_arn       = module.queues.validation_dlq_arn
+  source            = "../../modules/lambda"
+  project           = local.project
+  environment       = var.environment
+  function_name     = "validation"
+  source_dir        = "${path.root}/../../../services/validation"
+  policy_json       = data.aws_iam_policy_document.validation.json
+  has_custom_policy = true
+  dlq_arn           = module.queues.validation_dlq_arn
+  has_dlq           = true
 
   environment_variables = {
     ORDERS_TABLE   = module.database.table_name
@@ -151,13 +159,15 @@ data "aws_iam_policy_document" "validation" {
 # ---------------------------------------------------------------------------
 
 module "inventory" {
-  source        = "../../modules/lambda"
-  project       = local.project
-  environment   = var.environment
-  function_name = "inventory"
-  source_dir    = "${path.root}/../../../services/inventory"
-  policy_json   = data.aws_iam_policy_document.inventory.json
-  dlq_arn       = module.queues.inventory_dlq_arn
+  source            = "../../modules/lambda"
+  project           = local.project
+  environment       = var.environment
+  function_name     = "inventory"
+  source_dir        = "${path.root}/../../../services/inventory"
+  policy_json       = data.aws_iam_policy_document.inventory.json
+  has_custom_policy = true
+  dlq_arn           = module.queues.inventory_dlq_arn
+  has_dlq           = true
 
   environment_variables = {
     ORDERS_TABLE    = module.database.table_name
@@ -253,13 +263,15 @@ resource "aws_secretsmanager_secret" "stripe_key" {
 }
 
 module "payment" {
-  source        = "../../modules/lambda"
-  project       = local.project
-  environment   = var.environment
-  function_name = "payment"
-  source_dir    = "${path.root}/../../../services/payment"
-  policy_json   = data.aws_iam_policy_document.payment.json
-  dlq_arn       = module.queues.payment_dlq_arn
+  source            = "../../modules/lambda"
+  project           = local.project
+  environment       = var.environment
+  function_name     = "payment"
+  source_dir        = "${path.root}/../../../services/payment"
+  policy_json       = data.aws_iam_policy_document.payment.json
+  has_custom_policy = true
+  dlq_arn           = module.queues.payment_dlq_arn
+  has_dlq           = true
 
   environment_variables = {
     ORDERS_TABLE      = module.database.table_name
