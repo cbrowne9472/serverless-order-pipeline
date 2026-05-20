@@ -1,0 +1,6 @@
+# Copy this to terraform.tfvars and fill in your values.
+# S3 bucket names must be globally unique across all AWS accounts.
+
+aws_region        = "us-east-1"
+state_bucket_name = "serverless-order-pipeline-tf-state-cbrowne-2024"
+lock_table_name   = "serverless-order-pipeline-tf-locks"

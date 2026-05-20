@@ -101,3 +101,53 @@ resource "aws_cloudwatch_metric_alarm" "payment_dlq_depth" {
     QueueName = aws_sqs_queue.payment_dlq.name
   }
 }
+
+# ---------------------------------------------------------------------------
+# Notification DLQ
+# ---------------------------------------------------------------------------
+
+resource "aws_sqs_queue" "notification_dlq" {
+  name                      = "${local.prefix}-notification-dlq"
+  message_retention_seconds = 1209600
+}
+
+resource "aws_cloudwatch_metric_alarm" "notification_dlq_depth" {
+  alarm_name          = "${local.prefix}-notification-dlq-not-empty"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "Notification DLQ has messages — a confirmation email failed after retries"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.notification_dlq.name
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Warehouse DLQ
+# ---------------------------------------------------------------------------
+
+resource "aws_sqs_queue" "warehouse_dlq" {
+  name                      = "${local.prefix}-warehouse-dlq"
+  message_retention_seconds = 1209600
+}
+
+resource "aws_cloudwatch_metric_alarm" "warehouse_dlq_depth" {
+  alarm_name          = "${local.prefix}-warehouse-dlq-not-empty"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "Warehouse DLQ has messages — a fulfillment job failed after retries"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.warehouse_dlq.name
+  }
+}

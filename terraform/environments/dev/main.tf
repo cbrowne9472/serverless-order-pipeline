@@ -353,6 +353,116 @@ resource "aws_lambda_permission" "eventbridge_invoke_inventory_release" {
 }
 
 # ---------------------------------------------------------------------------
+# Notification Lambda (SES confirmation email on PaymentConfirmed)
+# ---------------------------------------------------------------------------
+
+resource "aws_ses_email_identity" "sender" {
+  email = "cbrowne2004@gmail.com"
+}
+
+module "notification" {
+  source            = "../../modules/lambda"
+  project           = local.project
+  environment       = var.environment
+  function_name     = "notification"
+  source_dir        = "${path.root}/../../../services/notification"
+  policy_json       = data.aws_iam_policy_document.notification.json
+  has_custom_policy = true
+  dlq_arn           = module.queues.notification_dlq_arn
+  has_dlq           = true
+
+  environment_variables = {
+    SENDER_EMAIL = aws_ses_email_identity.sender.email
+  }
+}
+
+data "aws_iam_policy_document" "notification" {
+  statement {
+    effect    = "Allow"
+    actions   = ["ses:SendEmail", "ses:SendRawEmail"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "payment_confirmed_notification" {
+  name           = "${local.project}-${var.environment}-payment-confirmed-notification"
+  event_bus_name = module.eventbridge.event_bus_name
+
+  event_pattern = jsonencode({
+    source      = ["order-pipeline"]
+    detail-type = ["PaymentConfirmed"]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "notification" {
+  rule           = aws_cloudwatch_event_rule.payment_confirmed_notification.name
+  event_bus_name = module.eventbridge.event_bus_name
+  target_id      = "NotificationLambda"
+  arn            = module.notification.function_arn
+}
+
+resource "aws_lambda_permission" "eventbridge_invoke_notification" {
+  statement_id  = "AllowEventBridgeInvokeNotification"
+  action        = "lambda:InvokeFunction"
+  function_name = module.notification.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.payment_confirmed_notification.arn
+}
+
+# ---------------------------------------------------------------------------
+# SNS fan-out + Warehouse Lambda
+# ---------------------------------------------------------------------------
+
+module "sns" {
+  source      = "../../modules/sns"
+  project     = local.project
+  environment = var.environment
+}
+
+# PaymentConfirmed → SNS topic (warehouse fan-out)
+resource "aws_cloudwatch_event_rule" "payment_confirmed_sns" {
+  name           = "${local.project}-${var.environment}-payment-confirmed-sns"
+  event_bus_name = module.eventbridge.event_bus_name
+
+  event_pattern = jsonencode({
+    source      = ["order-pipeline"]
+    detail-type = ["PaymentConfirmed"]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "order_notifications_sns" {
+  rule           = aws_cloudwatch_event_rule.payment_confirmed_sns.name
+  event_bus_name = module.eventbridge.event_bus_name
+  target_id      = "OrderNotificationsSNS"
+  arn            = module.sns.order_notifications_arn
+}
+
+module "warehouse" {
+  source            = "../../modules/lambda"
+  project           = local.project
+  environment       = var.environment
+  function_name     = "warehouse"
+  source_dir        = "${path.root}/../../../services/warehouse"
+  has_custom_policy = false
+  dlq_arn           = module.queues.warehouse_dlq_arn
+  has_dlq           = true
+}
+
+resource "aws_sns_topic_subscription" "warehouse" {
+  topic_arn = module.sns.order_notifications_arn
+  protocol  = "lambda"
+  endpoint  = module.warehouse.function_arn
+}
+
+resource "aws_lambda_permission" "sns_invoke_warehouse" {
+  statement_id  = "AllowSNSInvokeWarehouse"
+  action        = "lambda:InvokeFunction"
+  function_name = module.warehouse.function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = module.sns.order_notifications_arn
+}
+
+# ---------------------------------------------------------------------------
 # Wire the DynamoDB stream to the stream processor Lambda
 # ---------------------------------------------------------------------------
 

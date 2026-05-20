@@ -22,3 +22,13 @@ output "payment_dlq_arn" {
   description = "Payment Lambda DLQ ARN"
   value       = aws_sqs_queue.payment_dlq.arn
 }
+
+output "notification_dlq_arn" {
+  description = "Notification Lambda DLQ ARN"
+  value       = aws_sqs_queue.notification_dlq.arn
+}
+
+output "warehouse_dlq_arn" {
+  description = "Warehouse Lambda DLQ ARN"
+  value       = aws_sqs_queue.warehouse_dlq.arn
+}

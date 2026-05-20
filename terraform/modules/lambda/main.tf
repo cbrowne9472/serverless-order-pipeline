@@ -34,7 +34,7 @@ resource "aws_iam_role_policy_attachment" "xray" {
 
 # Optional additional policy — callers pass a JSON policy document for service-specific permissions
 resource "aws_iam_role_policy" "custom" {
-  count  = var.policy_json != "" ? 1 : 0
+  count  = var.has_custom_policy ? 1 : 0
   name   = "${local.function_name}-policy"
   role   = aws_iam_role.this.id
   policy = var.policy_json
@@ -42,7 +42,7 @@ resource "aws_iam_role_policy" "custom" {
 
 # When a DLQ ARN is provided, failed async invocations route there after retries
 resource "aws_lambda_function_event_invoke_config" "this" {
-  count         = var.dlq_arn != "" ? 1 : 0
+  count         = var.has_dlq ? 1 : 0
   function_name = aws_lambda_function.this.function_name
 
   maximum_retry_attempts = 2
@@ -55,14 +55,14 @@ resource "aws_lambda_function_event_invoke_config" "this" {
 }
 
 resource "aws_iam_role_policy" "dlq" {
-  count  = var.dlq_arn != "" ? 1 : 0
+  count  = var.has_dlq ? 1 : 0
   name   = "${local.function_name}-dlq-policy"
   role   = aws_iam_role.this.id
   policy = data.aws_iam_policy_document.dlq[0].json
 }
 
 data "aws_iam_policy_document" "dlq" {
-  count = var.dlq_arn != "" ? 1 : 0
+  count = var.has_dlq ? 1 : 0
 
   statement {
     effect    = "Allow"
@@ -71,10 +71,31 @@ data "aws_iam_policy_document" "dlq" {
   }
 }
 
+# Install dependencies then zip — ensures third-party packages like stripe are bundled
+resource "null_resource" "build" {
+  triggers = {
+    requirements = fileexists("${var.source_dir}/requirements.txt") ? filemd5("${var.source_dir}/requirements.txt") : "none"
+    source_hash  = sha256(join("", [for f in fileset(var.source_dir, "*.py") : filemd5("${var.source_dir}/${f}")]))
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      BUILD="${path.module}/builds/${var.function_name}_pkg"
+      rm -rf "$BUILD" && mkdir -p "$BUILD"
+      cp "${var.source_dir}"/*.py "$BUILD/"
+      if [ -f "${var.source_dir}/requirements.txt" ]; then
+        pip3 install -r "${var.source_dir}/requirements.txt" -t "$BUILD/" --quiet
+      fi
+    EOT
+  }
+}
+
 data "archive_file" "source" {
   type        = "zip"
-  source_dir  = var.source_dir
+  source_dir  = "${path.module}/builds/${var.function_name}_pkg"
   output_path = "${path.module}/builds/${var.function_name}.zip"
+  depends_on  = [null_resource.build]
 }
 
 resource "aws_lambda_function" "this" {

@@ -14,9 +14,21 @@ variable "function_name" {
 }
 
 variable "policy_json" {
-  description = "JSON IAM policy document granting service-specific permissions. Leave empty for base role only."
+  description = "JSON IAM policy document granting service-specific permissions."
   type        = string
   default     = ""
+}
+
+variable "has_custom_policy" {
+  description = "Set to true when policy_json is provided. Required because policy_json contains computed ARNs unknown at plan time."
+  type        = bool
+  default     = false
+}
+
+variable "has_dlq" {
+  description = "Set to true when dlq_arn is provided. Required because dlq_arn contains computed ARNs unknown at plan time."
+  type        = bool
+  default     = false
 }
 
 variable "source_dir" {
