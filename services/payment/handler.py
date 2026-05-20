@@ -1,9 +1,13 @@
 import json
+import logging
 import os
 from datetime import datetime, timezone
 
 import boto3
 import stripe
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 dynamodb = boto3.resource("dynamodb")
 events_client = boto3.client("events")
@@ -41,6 +45,11 @@ def lambda_handler(event, context):
         _publish_event("PaymentConfirmed", {**order, "payment_intent_id": intent.id})
 
     except stripe.error.CardError as e:
+        logger.info(json.dumps({
+            "event": "payment_failed",
+            "order_id": order_id,
+            "reason": e.user_message,
+        }))
         _update_order_status(order_id, "PAYMENT_FAILED")
         _publish_event("PaymentFailed", {**order, "failure_reason": e.user_message})
 

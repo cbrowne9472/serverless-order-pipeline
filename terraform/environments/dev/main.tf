@@ -463,6 +463,17 @@ resource "aws_lambda_permission" "sns_invoke_warehouse" {
 }
 
 # ---------------------------------------------------------------------------
+# Monitoring — CloudWatch dashboard + payment failure alarm
+# ---------------------------------------------------------------------------
+
+module "monitoring" {
+  source      = "../../modules/monitoring"
+  project     = local.project
+  environment = var.environment
+  aws_region  = var.aws_region
+}
+
+# ---------------------------------------------------------------------------
 # Wire the DynamoDB stream to the stream processor Lambda
 # ---------------------------------------------------------------------------
 
