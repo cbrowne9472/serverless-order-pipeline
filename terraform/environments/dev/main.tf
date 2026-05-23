@@ -60,6 +60,41 @@ module "api_gateway" {
   environment                = var.environment
   order_intake_invoke_arn    = module.order_intake.invoke_arn
   order_intake_function_name = module.order_intake.function_name
+  order_query_invoke_arn     = module.order_query.invoke_arn
+  order_query_function_name  = module.order_query.function_name
+}
+
+# ---------------------------------------------------------------------------
+# Order Query Lambda (GET /orders, GET /orders/{order_id})
+# ---------------------------------------------------------------------------
+
+module "order_query" {
+  source            = "../../modules/lambda"
+  project           = "serverless-order-pipeline"
+  environment       = var.environment
+  function_name     = "order-query"
+  source_dir        = "${path.root}/../../../services/order-query"
+  policy_json       = data.aws_iam_policy_document.order_query.json
+  has_custom_policy = true
+
+  environment_variables = {
+    ORDERS_TABLE = module.database.table_name
+  }
+}
+
+data "aws_iam_policy_document" "order_query" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:Scan",
+      "dynamodb:Query",
+    ]
+    resources = [
+      module.database.table_arn,
+      "${module.database.table_arn}/index/*",
+    ]
+  }
 }
 
 module "queues" {
