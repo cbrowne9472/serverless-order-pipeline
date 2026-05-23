@@ -62,6 +62,8 @@ module "api_gateway" {
   order_intake_function_name = module.order_intake.function_name
   order_query_invoke_arn     = module.order_query.invoke_arn
   order_query_function_name  = module.order_query.function_name
+  dlq_monitor_invoke_arn     = module.dlq_monitor.invoke_arn
+  dlq_monitor_function_name  = module.dlq_monitor.function_name
 }
 
 # ---------------------------------------------------------------------------
@@ -495,6 +497,44 @@ resource "aws_lambda_permission" "sns_invoke_warehouse" {
   function_name = module.warehouse.function_name
   principal     = "sns.amazonaws.com"
   source_arn    = module.sns.order_notifications_arn
+}
+
+# ---------------------------------------------------------------------------
+# DLQ Monitor Lambda (GET /metrics/dlqs)
+# ---------------------------------------------------------------------------
+
+module "dlq_monitor" {
+  source            = "../../modules/lambda"
+  project           = local.project
+  environment       = var.environment
+  function_name     = "dlq-monitor"
+  source_dir        = "${path.root}/../../../services/dlq-monitor"
+  policy_json       = data.aws_iam_policy_document.dlq_monitor.json
+  has_custom_policy = true
+
+  environment_variables = {
+    STREAM_PROCESSOR_DLQ_URL = module.queues.stream_processor_dlq_url
+    VALIDATION_DLQ_URL       = module.queues.validation_dlq_url
+    INVENTORY_DLQ_URL        = module.queues.inventory_dlq_url
+    PAYMENT_DLQ_URL          = module.queues.payment_dlq_url
+    NOTIFICATION_DLQ_URL     = module.queues.notification_dlq_url
+    WAREHOUSE_DLQ_URL        = module.queues.warehouse_dlq_url
+  }
+}
+
+data "aws_iam_policy_document" "dlq_monitor" {
+  statement {
+    effect  = "Allow"
+    actions = ["sqs:GetQueueAttributes"]
+    resources = [
+      module.queues.stream_processor_dlq_arn,
+      module.queues.validation_dlq_arn,
+      module.queues.inventory_dlq_arn,
+      module.queues.payment_dlq_arn,
+      module.queues.notification_dlq_arn,
+      module.queues.warehouse_dlq_arn,
+    ]
+  }
 }
 
 # ---------------------------------------------------------------------------
