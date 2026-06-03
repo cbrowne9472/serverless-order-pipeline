@@ -154,6 +154,7 @@ resource "aws_cloudwatch_dashboard" "main" {
             ["AWS/ApiGateway", "Count", "ApiName", local.prefix, "Stage", var.environment, { "stat" : "Sum", "label" : "Requests" }],
             ["AWS/ApiGateway", "4XXError", "ApiName", local.prefix, "Stage", var.environment, { "stat" : "Sum", "label" : "4XX" }],
             ["AWS/ApiGateway", "5XXError", "ApiName", local.prefix, "Stage", var.environment, { "stat" : "Sum", "label" : "5XX" }],
+            # Note: API name matches aws_api_gateway_rest_api.this.name = "${project}-${environment}"
           ]
         }
       },

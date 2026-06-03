@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { listOrders } from './api'
+import DlqMonitor from './components/DlqMonitor'
 import OrderFeed from './components/OrderFeed'
 import PipelineChart from './components/PipelineChart'
+import PlaceOrder from './components/PlaceOrder'
 import type { Order } from './types'
 
 const POLL_INTERVAL_MS = 5000
@@ -13,7 +15,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  async function fetchOrders() {
+  const fetchOrders = useCallback(async () => {
     setLoading(true)
     try {
       const data = await listOrders()
@@ -25,7 +27,7 @@ export default function App() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchOrders()
@@ -33,7 +35,7 @@ export default function App() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [])
+  }, [fetchOrders])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -65,6 +67,12 @@ export default function App() {
         )}
 
         <PipelineChart orders={orders} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <PlaceOrder onOrderPlaced={fetchOrders} />
+          <DlqMonitor />
+        </div>
+
         <OrderFeed orders={orders} loading={loading} lastUpdated={lastUpdated} />
       </main>
     </div>

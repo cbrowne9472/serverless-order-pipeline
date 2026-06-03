@@ -9,3 +9,9 @@ output "base_url" {
 }
 
 data "aws_region" "current" {}
+
+output "api_key_value" {
+  description = "API key — add to VITE_API_KEY in frontend/.env.local"
+  value       = aws_api_gateway_api_key.dashboard.value
+  sensitive   = true
+}
